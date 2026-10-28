@@ -1,11 +1,13 @@
 import './style.css'
 import Alpine from 'alpinejs'
+import { loadSymbol } from "./xschem_reader/sym-reader";
 
 window.Alpine = Alpine;
 Alpine.start();
 
 //TODO: Create method for rendering a single XSchem Symbol!
 
+// Workspace:
 const WORLD_WIDTH = 10000;
 const WORLD_HEIGHT = 10000;
 
@@ -14,6 +16,8 @@ import { Application, Graphics, Text, TextStyle, Assets, Sprite, TilingSprite } 
 import { Viewport } from 'pixi-viewport';
 
 (async () => {
+  const symbolData = await loadSymbol("/src/symbols/diode.sym");
+
   // Application setup
   const app = new Application();
   await app.init({
@@ -22,60 +26,56 @@ import { Viewport } from 'pixi-viewport';
   });
 
   document.body.appendChild(app.canvas);
-  console.log(app.render.events)
   //Viewport setup
   const viewport = new Viewport({
     screenWidth: window.innerWidth,
     screenHeight: window.innerHeight,
     worldWidth: WORLD_WIDTH,
     worldHeight: WORLD_HEIGHT,
-    events: app.renderer.events
+    events: app.renderer.events,
   });
   // Mount the viewport. All other children are mounted to the viewport instead of the app stage.
   app.stage.addChild(viewport);
 
   // Enable drag, wheel, and pinch gestures, set middle mousebutton to drag button.
-  viewport.drag({mouseButtons: 'middle'}).wheel().pinch().decelerate();
+  viewport.drag({ mouseButtons: "middle" }).wheel().pinch();
   // Set Zoom Limits
-  viewport.clampZoom({minScale: 0.1, maxScale: 10})
+  viewport.clampZoom({ minScale: 0.1, maxScale: 10 });
   // Set default zoom.
   viewport.setZoom(1);
-  viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT/2);
+  viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
   // Rest Zoom when pressing: F
-  window.addEventListener('keydown', (event) => {
-    if (event.key.toLowerCase() === 'f'){
+  window.addEventListener("keydown", (event) => {
+    if (event.key.toLowerCase() === "f") {
       viewport.setZoom(1);
       viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
       // Alternative viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
     }
-  })
+  });
 
   // Viewport rectangle
   const background = new Graphics();
   background.rect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   background.fill({
-    color: 0x101020
+    color: 0x101020,
   });
-  viewport.addChildAt(background, 0)
+  viewport.addChildAt(background, 0);
 
-
-  // Infinite repeating grid texture.  
+  // Infinite repeating grid texture.
   const gridTexture = await Assets.load("/textures/grid-dots.png");
   const grid = new TilingSprite({
-    texture: gridTexture, 
-    width: WORLD_WIDTH, 
+    texture: gridTexture,
+    width: WORLD_WIDTH,
     height: WORLD_HEIGHT,
-    tileScale: 0.2
+    tileScale: 0.2,
   });
   grid.alpha = 0.1;
   // Add grid at index 0 (behind everything!)
-  viewport.addChildAt(grid, 1)
+  viewport.addChildAt(grid, 1);
   // Hide grid at certain zoom level
   app.ticker.add(() => {
     grid.visible = viewport.scaled >= 0.5;
-  })
-
-
+  });
 
   // Creating a simple triangle
   const rectangle = new Graphics();
@@ -127,8 +127,6 @@ import { Viewport } from 'pixi-viewport';
   viewport.addChild(text);
   viewport.addChild(line);
   viewport.addChild(sprite);
-
-  
 })();
 
 
