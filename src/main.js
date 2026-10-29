@@ -1,6 +1,6 @@
 import './style.css'
 import Alpine from 'alpinejs'
-import { loadSymbol } from "./xschem_reader/sym-reader";
+import * as XObject from "./xschem_reader/sym-reader";
 
 window.Alpine = Alpine;
 Alpine.start();
@@ -12,12 +12,11 @@ const WORLD_WIDTH = 10000;
 const WORLD_HEIGHT = 10000;
 
 
-import { Application, Graphics, Text, TextStyle, Assets, Sprite, TilingSprite } from 'pixi.js'
+import { Application, Graphics, Text, TextStyle, Assets, Sprite, TilingSprite, Polygon } from 'pixi.js'
 import { Viewport } from 'pixi-viewport';
 
 (async () => {
-  const symbolData = await loadSymbol("/src/symbols/diode.sym");
-
+  const diodeSymbol = await XObject.loadSymbol("/src/symbols/nfet_01v8.sym");
   // Application setup
   const app = new Application();
   await app.init({
@@ -43,19 +42,24 @@ import { Viewport } from 'pixi-viewport';
   viewport.clampZoom({ minScale: 0.1, maxScale: 10 });
   // Set default zoom.
   viewport.setZoom(1);
-  viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+  viewport.moveCenter(0, 0);
   // Rest Zoom when pressing: F
   window.addEventListener("keydown", (event) => {
     if (event.key.toLowerCase() === "f") {
       viewport.setZoom(1);
-      viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+      viewport.moveCenter(0, 0);
       // Alternative viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
     }
   });
 
   // Viewport rectangle
   const background = new Graphics();
-  background.rect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  background.rect(
+    -WORLD_WIDTH / 2,
+    -WORLD_HEIGHT / 2,
+    WORLD_WIDTH,
+    WORLD_HEIGHT,
+  );
   background.fill({
     color: 0x101020,
   });
@@ -69,6 +73,7 @@ import { Viewport } from 'pixi-viewport';
     height: WORLD_HEIGHT,
     tileScale: 0.2,
   });
+  grid.position.set(-WORLD_WIDTH / 2, -WORLD_HEIGHT / 2);
   grid.alpha = 0.1;
   // Add grid at index 0 (behind everything!)
   viewport.addChildAt(grid, 1);
@@ -79,7 +84,7 @@ import { Viewport } from 'pixi-viewport';
 
   // Creating a simple triangle
   const rectangle = new Graphics();
-  rectangle.rect(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 100, 100);
+  rectangle.rect(150, 150, 100, 100);
   rectangle.fill({
     color: 0xff0000,
   });
@@ -96,14 +101,10 @@ import { Viewport } from 'pixi-viewport';
   }
 
   // Creating a simple text + reusable text style
-  const textStyle = new TextStyle({
+  const GLOBAL_TEXT_STYLE = new TextStyle({
     fill: 0xffffff,
-    fontSize: 72,
-    fontFamily: "OpenSans",
-  });
-  const text = new Text({
-    text: "Hello World",
-    style: textStyle,
+    fontSize: 12,
+    fontFamily: "Segoe UI",
   });
 
   const texture = await Assets.load("/favicon.svg");
@@ -114,19 +115,58 @@ import { Viewport } from 'pixi-viewport';
   sprite.anchor.set(0.5, 0.5);
   sprite.rotation = Math.PI / 4;
 
-  const line = new Graphics();
-  line.moveTo(0, 0);
-  line.lineTo(200, 50);
-  line.stroke({
-    width: 2,
-    color: 0x00ff00,
-  });
-
   // Add elements to the viewport
   viewport.addChild(rectangle);
-  viewport.addChild(text);
-  viewport.addChild(line);
   viewport.addChild(sprite);
+
+  // Renderer
+  for(let i = 0; i < diodeSymbol.length; i++){
+    let graphic;
+    let element = diodeSymbol[i];
+
+    if (element instanceof XObject.Line) {
+      graphic = new Graphics();
+      graphic.moveTo(element.x1, element.y1);
+      graphic.lineTo(element.x2, element.y2);
+      graphic.stroke({
+        width: 1,
+        color: 0x00ff00,
+        cap: 'round',
+      });
+    } else if (element instanceof XObject.Rectangle) {
+      graphic = new Graphics();
+      graphic.rect(
+        element.x1,
+        element.y1,
+        element.x2 - element.x1,
+        element.y2 - element.y1,
+      );
+      graphic.fill({
+        color: 0xff0000,
+      });
+    } else if (element instanceof XObject.Polygon) {
+      graphic = new Graphics();
+      graphic.poly(element.pointArray, element.isClosed);
+      graphic.stroke({ width: 1, color: 0x00FF00, join: "round" });
+    } else if (element instanceof XObject.Text) {
+      graphic = new Text({
+        text: element.text,
+        style: {
+          fill: 0xffffff,
+          fontSize: 12 * 4 * element.sizeHorizontal,
+          fontFamily: "Segoe UI"
+        },
+        resolution: 4
+      });
+      graphic.fontSize
+      graphic.position.set(element.x, element.y);
+    }
+    // Add elements to viewport
+    if(graphic){
+      viewport.addChild(graphic);
+    }
+  }
+
 })();
 
 
