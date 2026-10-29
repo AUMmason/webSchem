@@ -12,11 +12,11 @@ const WORLD_WIDTH = 10000;
 const WORLD_HEIGHT = 10000;
 
 
-import { Application, Graphics, Text, TextStyle, Assets, Sprite, TilingSprite, Polygon } from 'pixi.js'
+import { Application, Graphics, Text, TextStyle, Assets, Sprite, TilingSprite } from 'pixi.js'
 import { Viewport } from 'pixi-viewport';
 
 (async () => {
-  const diodeSymbol = await XObject.loadSymbol("/src/symbols/nfet_01v8.sym");
+  const diodeSymbol = await XObject.loadSymbol("/src/symbols/diode.sym");
   // Application setup
   const app = new Application();
   await app.init({
@@ -120,6 +120,8 @@ import { Viewport } from 'pixi-viewport';
   viewport.addChild(sprite);
 
   // Renderer
+  // TODO: implement displaying of attributes (fill, layer, etc.);
+  // TODO: extract render functionality to separate file.
   for(let i = 0; i < diodeSymbol.length; i++){
     let graphic;
     let element = diodeSymbol[i];
@@ -148,6 +150,18 @@ import { Viewport } from 'pixi-viewport';
       graphic = new Graphics();
       graphic.poly(element.pointArray, element.isClosed);
       graphic.stroke({ width: 1, color: 0x00FF00, join: "round" });
+      if(element.isClosed){
+        if(element.attributes && element.attributes.get("fill") === true){
+          graphic.fill({
+            color: 0x00ff00,
+          });
+        }
+      }
+      console.log(element);
+    } else if (element instanceof XObject.Arc) {
+      graphic = new Graphics();
+      graphic.arc(element.x, element.y, element.radius, element.angleStart, element.angleEnd, false);
+      graphic.stroke({ width: 1, color: 0x00ff00, join: "round" });
     } else if (element instanceof XObject.Text) {
       graphic = new Text({
         text: element.text,

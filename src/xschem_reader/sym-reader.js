@@ -5,14 +5,15 @@ import {
 } from "pixi.js";
 
 export class Primitive {
-  constructor(layer) {
+  constructor(layer, attributes) {
     this.layer = layer;
+    this.attributes = attributes;
   }
 }
 
 export class Rectangle extends Primitive {
-  constructor(layer, x1, y1, x2, y2) {
-    super(layer);
+  constructor(layer, x1, y1, x2, y2, attributes) {
+    super(layer, attributes);
     this.x1 = x1;
     this.y1 = y1;
     this.x2 = x2;
@@ -21,14 +22,14 @@ export class Rectangle extends Primitive {
 }
 //B layer x1 y1 x2 y2 {attributes}
 export class Line extends Rectangle {
-  constructor(layer, x1, y1, x2, y2) {
-    super(layer, x1, y1, x2, y2);
+  constructor(layer, x1, y1, x2, y2, attributes) {
+    super(layer, x1, y1, x2, y2, attributes);
   }
 }
 
 export class Polygon extends Primitive {
-  constructor(layer, nPoints, pointArray){
-    super(layer);
+  constructor(layer, nPoints, pointArray, attributes){
+    super(layer, attributes);
     this.nPoints = nPoints;
     this.pointArray = pointArray; // x1, y1, x2, y2, ...
     this.isClosed = false;
@@ -39,9 +40,10 @@ export class Polygon extends Primitive {
   }
 }
 
-export class Text {
+export class Text extends Primitive{
   // Text Format: T {customText} x y rotation mirror horizontal_size vertical_size {font=String layer=Int}
-  constructor(text, x, y, rotation, mirror, sizeHorizontal, sizeVertical) {
+  constructor(text, x, y, rotation, mirror, sizeHorizontal, sizeVertical, attributes) {
+    super(undefined, attributes);
     this.text = text;
     this.x = x;
     this.y = y;
@@ -49,72 +51,184 @@ export class Text {
     this.mirror = mirror;
     this.sizeHorizontal = sizeHorizontal;
     this.sizeVertical = sizeVertical;
+    this.attributes = attributes;
   }
+}
+
+export class Arc extends Primitive{
+  constructor(layer, x, y, radius, angleStart, angleEnd, attributes) {
+    super(layer, attributes);
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.angleStart = angleStart;
+    this.angleEnd = angleEnd;
+  }
+}
+
+export function splitXSchemLine(string) {
+  const substrings = [];
+  const separator = ' ';
+  let lastChar = '';
+  let currentString = "";
+  let depth = 0;
+
+  for (let i = 0; i < string.length; i++){
+    const char = string[i];
+    
+    if(depth > 0){
+      if (char === "{") {
+        depth++;
+      }
+      if (char === "}") {
+        depth--;
+      }
+      currentString += char;
+    } else {
+      if (char === '{') {
+        depth++;
+      }
+      if (char === separator) {
+        // Avoid adding substrings for multiple spaces
+        if(lastChar !== char){
+          substrings.push(currentString);
+          currentString = "";
+        }
+      } else {
+        currentString += char;
+      }
+    }
+    lastChar = char;
+    // Debug:
+    // console.table(char, depth, currentString);
+  }
+  // Do not add trailing spaces to substrings.
+  for(let i = 0; i < currentString.length; i++){
+    let char = currentString[i];
+    // Check if the last currentString contains characters other than ' '
+    // If yes add it to substrings.
+    if(char !== ' '){
+      substrings.push(currentString);
+      break;
+    }
+  }
+  return substrings;
+}
+
+export function parseObjectAttributes(attributes){
+  // attributes is an array
+  if(attributes === undefined || attributes.length === 0 || attributes === '{}'){
+    return new Map();
+  }
+  // Remove braces {...} from the attributes string 
+  let attributes_string = attributes.substring(1, attributes.length - 1);
+  // Extract the individual attribute strings
+  let itemArray = attributes_string.split(" ");
+  let attributeDict = new Map();
+
+  for (let i = 0; i < itemArray.length; i++) {
+    const item = itemArray[i];
+    if (item !== "") {
+      // Extract key and value
+      let attribute = item.split("=");
+      let name = attribute[0];
+      let value = attribute[1];
+
+      switch (name) {
+        case "layer":
+          value = parseInt(value);
+          break;
+        case "fill":
+          if(value === 'true'){
+            value = true;
+          } else {
+            value = false;
+          }
+        default:
+          break;
+      }
+      // Only add entries if both key and value are defined
+      if(name && value) {
+        attributeDict.set(name, value);
+      }
+    }
+  }
+  return attributeDict;
 }
 
 export async function loadSymbol(path) {
   const response = await fetch(path);
-  
-  // TODO: implement parser here!
   const text = await response.text();
+  // Separate text into lines
   let items = text.split("\n");
-
   let graphics = [];
   
+  // Parse each line:
   items.forEach((item) => {
-    let subItems = item.split(" ");
-    switch (subItems[0]) {
-      case "*":
-        console.log("Comment!");
-        break;
-      case "L":
-        console.log("Line");
+    let subItems;
+    // TODO: line detection is not robust. This must be improved.
+    switch (item[0] + item[1]) {
+      case "L ":
+        subItems = splitXSchemLine(item);
         // Line Format: L layer x1 y1 x2 y2 {attributes}
         graphics.push(
           new Line(
-            parseInt(subItems[1]),
-            parseFloat(subItems[2]),
-            parseFloat(subItems[3]),
-            parseFloat(subItems[4]),
-            parseFloat(subItems[5]),
+            parseInt(subItems[1]), // layer
+            parseFloat(subItems[2]), // x1
+            parseFloat(subItems[3]), // y1
+            parseFloat(subItems[4]), // x2
+            parseFloat(subItems[5]), // y2
+            parseObjectAttributes(subItems[6]) // attributes
           ),
         );
         break;
-      case "B":
-        console.log("Rectangle");
+      case "B ":
+        subItems = splitXSchemLine(item);
         // Rectangle Format: B layer x1 y1 x2 y2 {attributes}
         graphics.push(
           new Rectangle(
-            parseInt(subItems[1]),
-            parseFloat(subItems[2]),
-            parseFloat(subItems[3]),
-            parseFloat(subItems[4]),
-            parseFloat(subItems[5]),
+            parseInt(subItems[1]), // layer
+            parseFloat(subItems[2]), // x1
+            parseFloat(subItems[3]), // y1
+            parseFloat(subItems[4]), // x2
+            parseFloat(subItems[5]), // y2
+            parseObjectAttributes(subItems[6]), // attributes
           ),
         );
         break;
-      case "P":
-        console.log("Polygon");
+      case "P ":
+        subItems = splitXSchemLine(item);
         // Polygon Format: Format: P layer npoints px1 py1 px2 py2 .... {attributes}
-
         let pointArray = subItems.slice(3, subItems.length - 1);
         for (let i = 0; i < pointArray.length; i++) {
           pointArray[i] = parseFloat(pointArray[i]);
         }
-        console.log(pointArray);
         graphics.push(
           new Polygon(
             parseInt(subItems[1]), // layer
             parseInt(subItems[2]), // npoints
             pointArray,
+            parseObjectAttributes(subItems[subItems.length - 1]), // attributes
           ),
         );
         break;
-      case "A":
-        console.log("Arc / Circle");
+      case "A ":
+        subItems = splitXSchemLine(item);
+        // Arc / Circle format: A x y radius angle_a angle_b {attributes}
+        graphics.push(
+          new Arc(
+            parseInt(subItems[1]), // layer
+            parseFloat(subItems[2]), // x
+            parseFloat(subItems[3]), // y
+            parseFloat(subItems[4]), // radius
+            parseFloat(subItems[5]), // start angle
+            parseFloat(subItems[6]), // end angle
+            parseObjectAttributes(subItems[7]), // attributes
+          ),
+        );
         break;
-      case "T":
-        console.log("Text");
+      case "T ":
+        subItems = splitXSchemLine(item);
         // Text Format: T {customText} x y rotation mirror horizontal_size vertical_size {font=String layer=Int}
         let text = subItems[1];
         text = text.substring(1, text.length - 1);
@@ -127,6 +241,7 @@ export async function loadSymbol(path) {
             parseInt(subItems[5]), // mirror: 0, 1, 2, 3
             parseFloat(subItems[6]), // horizontal size
             parseFloat(subItems[7]), // horizontal size
+            parseObjectAttributes(subItems[8]), // attributes
           ),
         );
         break;
