@@ -1,22 +1,23 @@
 import './style.css'
 import Alpine from 'alpinejs'
-import * as XObject from "./xschem_reader/sym-reader";
+import * as XObject from "./xschem_reader/XObject";
+import { loadSymbol } from "./xschem_reader/sym-reader";
+import { createPIXIcontainer } from './renderer/renderer';
 
 window.Alpine = Alpine;
 Alpine.start();
 
-//TODO: Create method for rendering a single XSchem Symbol!
-
 // Workspace:
 const WORLD_WIDTH = 10000;
 const WORLD_HEIGHT = 10000;
-
+const DEFAULT_ZOOM_LEVEL = 2;
 
 import { Application, Graphics, Text, TextStyle, Assets, Sprite, TilingSprite } from 'pixi.js'
 import { Viewport } from 'pixi-viewport';
 
 (async () => {
-  const diodeSymbol = await XObject.loadSymbol("/src/symbols/diode.sym");
+  const diode = await loadSymbol("/src/symbols/diode.sym");
+  const pfet = await loadSymbol("/src/symbols/res_generic_l1.sym");
   // Application setup
   const app = new Application();
   await app.init({
@@ -32,21 +33,22 @@ import { Viewport } from 'pixi-viewport';
     worldWidth: WORLD_WIDTH,
     worldHeight: WORLD_HEIGHT,
     events: app.renderer.events,
+    // Add these:
   });
   // Mount the viewport. All other children are mounted to the viewport instead of the app stage.
   app.stage.addChild(viewport);
-
+  // Enable Viewport culling
   // Enable drag, wheel, and pinch gestures, set middle mousebutton to drag button.
   viewport.drag({ mouseButtons: "middle" }).wheel().pinch();
   // Set Zoom Limits
   viewport.clampZoom({ minScale: 0.1, maxScale: 10 });
   // Set default zoom.
-  viewport.setZoom(1);
+  viewport.setZoom(DEFAULT_ZOOM_LEVEL);
   viewport.moveCenter(0, 0);
   // Rest Zoom when pressing: F
   window.addEventListener("keydown", (event) => {
     if (event.key.toLowerCase() === "f") {
-      viewport.setZoom(1);
+      viewport.setZoom(DEFAULT_ZOOM_LEVEL);
       viewport.moveCenter(0, 0);
       // Alternative viewport.moveCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
     }
@@ -64,6 +66,20 @@ import { Viewport } from 'pixi-viewport';
     color: 0x101020,
   });
   viewport.addChildAt(background, 0);
+
+  const diodeTexture = app.renderer.generateTexture({
+    target: createPIXIcontainer(diode).children[0],
+    resolution: 6,
+    clearColor: "transparent",
+    antialias: false
+  });
+
+  const pfetTexture = app.renderer.generateTexture({
+    target: createPIXIcontainer(pfet),
+    resolution: 6,
+    clearColor: "transparent",
+    antialias: false,
+  });
 
   // Infinite repeating grid texture.
   const gridTexture = await Assets.load("/textures/grid-dots.png");
@@ -118,66 +134,25 @@ import { Viewport } from 'pixi-viewport';
   // Add elements to the viewport
   viewport.addChild(rectangle);
   viewport.addChild(sprite);
+  //viewport.addChild(renderComponent(diode));
 
-  // Renderer
-  // TODO: implement displaying of attributes (fill, layer, etc.);
-  // TODO: extract render functionality to separate file.
-  for(let i = 0; i < diodeSymbol.length; i++){
-    let graphic;
-    let element = diodeSymbol[i];
-
-    if (element instanceof XObject.Line) {
-      graphic = new Graphics();
-      graphic.moveTo(element.x1, element.y1);
-      graphic.lineTo(element.x2, element.y2);
-      graphic.stroke({
-        width: 1,
-        color: 0x00ff00,
-        cap: 'round',
-      });
-    } else if (element instanceof XObject.Rectangle) {
-      graphic = new Graphics();
-      graphic.rect(
-        element.x1,
-        element.y1,
-        element.x2 - element.x1,
-        element.y2 - element.y1,
+  for(let x = 0; x < 10; x++){
+    for(let y = 0; y < 10; y++){
+      
+      let component = new Sprite(diodeTexture);
+      component.position.set(
+        100 * x,
+        100 * y,
       );
-      graphic.fill({
-        color: 0xff0000,
-      });
-    } else if (element instanceof XObject.Polygon) {
-      graphic = new Graphics();
-      graphic.poly(element.pointArray, element.isClosed);
-      graphic.stroke({ width: 1, color: 0x00FF00, join: "round" });
-      if(element.isClosed){
-        if(element.attributes && element.attributes.get("fill") === true){
-          graphic.fill({
-            color: 0x00ff00,
-          });
-        }
-      }
-      console.log(element);
-    } else if (element instanceof XObject.Arc) {
-      graphic = new Graphics();
-      graphic.arc(element.x, element.y, element.radius, element.angleStart, element.angleEnd, false);
-      graphic.stroke({ width: 1, color: 0x00ff00, join: "round" });
-    } else if (element instanceof XObject.Text) {
-      graphic = new Text({
-        text: element.text,
-        style: {
-          fill: 0xffffff,
-          fontSize: 12 * 4 * element.sizeHorizontal,
-          fontFamily: "Segoe UI"
-        },
-        resolution: 4
-      });
-      graphic.fontSize
-      graphic.position.set(element.x, element.y);
+      viewport.addChild(component);
     }
-    // Add elements to viewport
-    if(graphic){
-      viewport.addChild(graphic);
+  }
+
+  for (let x = 0; x < 10; x++) {
+    for (let y = 0; y < 10; y++) {
+      let component = new Sprite(pfetTexture);
+      component.position.set(-1200 + 100 * x,-1200 + 100 * y);
+      viewport.addChild(component);
     }
   }
 

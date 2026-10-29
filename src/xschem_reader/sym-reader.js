@@ -1,72 +1,8 @@
 // http://repo.hu/projects/xschem/xschem_man/developer_info.html
 
-import {
-  Graphics
-} from "pixi.js";
+import * as XObject from "./XObject";
 
-export class Primitive {
-  constructor(layer, attributes) {
-    this.layer = layer;
-    this.attributes = attributes;
-  }
-}
-
-export class Rectangle extends Primitive {
-  constructor(layer, x1, y1, x2, y2, attributes) {
-    super(layer, attributes);
-    this.x1 = x1;
-    this.y1 = y1;
-    this.x2 = x2;
-    this.y2 = y2;
-  }
-}
-//B layer x1 y1 x2 y2 {attributes}
-export class Line extends Rectangle {
-  constructor(layer, x1, y1, x2, y2, attributes) {
-    super(layer, x1, y1, x2, y2, attributes);
-  }
-}
-
-export class Polygon extends Primitive {
-  constructor(layer, nPoints, pointArray, attributes){
-    super(layer, attributes);
-    this.nPoints = nPoints;
-    this.pointArray = pointArray; // x1, y1, x2, y2, ...
-    this.isClosed = false;
-    if(pointArray[0] == pointArray[pointArray.length - 2] 
-      && pointArray[1] == pointArray[pointArray.length - 1]){
-        this.isClosed = true;
-    }
-  }
-}
-
-export class Text extends Primitive{
-  // Text Format: T {customText} x y rotation mirror horizontal_size vertical_size {font=String layer=Int}
-  constructor(text, x, y, rotation, mirror, sizeHorizontal, sizeVertical, attributes) {
-    super(undefined, attributes);
-    this.text = text;
-    this.x = x;
-    this.y = y;
-    this.rotation = rotation;
-    this.mirror = mirror;
-    this.sizeHorizontal = sizeHorizontal;
-    this.sizeVertical = sizeVertical;
-    this.attributes = attributes;
-  }
-}
-
-export class Arc extends Primitive{
-  constructor(layer, x, y, radius, angleStart, angleEnd, attributes) {
-    super(layer, attributes);
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
-    this.angleStart = angleStart;
-    this.angleEnd = angleEnd;
-  }
-}
-
-export function splitXSchemLine(string) {
+function splitXSchemLine(string) {
   const substrings = [];
   const separator = ' ';
   let lastChar = '';
@@ -115,7 +51,7 @@ export function splitXSchemLine(string) {
   return substrings;
 }
 
-export function parseObjectAttributes(attributes){
+function parseObjectAttributes(attributes){
   // attributes is an array
   if(attributes === undefined || attributes.length === 0 || attributes === '{}'){
     return new Map();
@@ -161,7 +97,7 @@ export async function loadSymbol(path) {
   const text = await response.text();
   // Separate text into lines
   let items = text.split("\n");
-  let graphics = [];
+  let primitives = [];
   
   // Parse each line:
   items.forEach((item) => {
@@ -171,8 +107,8 @@ export async function loadSymbol(path) {
       case "L ":
         subItems = splitXSchemLine(item);
         // Line Format: L layer x1 y1 x2 y2 {attributes}
-        graphics.push(
-          new Line(
+        primitives.push(
+          new XObject.Line(
             parseInt(subItems[1]), // layer
             parseFloat(subItems[2]), // x1
             parseFloat(subItems[3]), // y1
@@ -185,8 +121,8 @@ export async function loadSymbol(path) {
       case "B ":
         subItems = splitXSchemLine(item);
         // Rectangle Format: B layer x1 y1 x2 y2 {attributes}
-        graphics.push(
-          new Rectangle(
+        primitives.push(
+          new XObject.Rectangle(
             parseInt(subItems[1]), // layer
             parseFloat(subItems[2]), // x1
             parseFloat(subItems[3]), // y1
@@ -203,8 +139,8 @@ export async function loadSymbol(path) {
         for (let i = 0; i < pointArray.length; i++) {
           pointArray[i] = parseFloat(pointArray[i]);
         }
-        graphics.push(
-          new Polygon(
+        primitives.push(
+          new XObject.Polygon(
             parseInt(subItems[1]), // layer
             parseInt(subItems[2]), // npoints
             pointArray,
@@ -215,8 +151,8 @@ export async function loadSymbol(path) {
       case "A ":
         subItems = splitXSchemLine(item);
         // Arc / Circle format: A x y radius angle_a angle_b {attributes}
-        graphics.push(
-          new Arc(
+        primitives.push(
+          new XObject.Arc(
             parseInt(subItems[1]), // layer
             parseFloat(subItems[2]), // x
             parseFloat(subItems[3]), // y
@@ -232,8 +168,8 @@ export async function loadSymbol(path) {
         // Text Format: T {customText} x y rotation mirror horizontal_size vertical_size {font=String layer=Int}
         let text = subItems[1];
         text = text.substring(1, text.length - 1);
-        graphics.push(
-          new Text(
+        primitives.push(
+          new XObject.Text(
             text,
             parseFloat(subItems[2]), // x
             parseFloat(subItems[3]), // y
@@ -249,5 +185,5 @@ export async function loadSymbol(path) {
         break;
     }
   });
-  return graphics;
+  return new XObject.Component("component", primitives);
 }
